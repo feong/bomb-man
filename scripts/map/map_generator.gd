@@ -3,14 +3,9 @@ extends RefCounted
 
 
 func generate() -> MapData:
-	var density: float = GameConstants.SOFT_WALL_DENSITY
-	for _attempt in 10:
-		var map := _build_base()
-		_scatter_soft_walls(map, density)
-		if _is_connected(map):
-			return map
-		density *= 0.9
-	return _build_base()
+	var map := _build_base()
+	_scatter_soft_walls(map, GameConstants.SOFT_WALL_DENSITY)
+	return map
 
 
 func get_active_spawns() -> Array[Vector2i]:
@@ -46,13 +41,19 @@ func _is_safe_zone(cell: Vector2i) -> bool:
 
 
 func _scatter_soft_walls(map: MapData, density: float) -> void:
+	var candidates: Array[Vector2i] = []
 	for y in range(1, GameConstants.GRID_HEIGHT - 1):
 		for x in range(1, GameConstants.GRID_WIDTH - 1):
 			var cell := Vector2i(x, y)
-			if map.is_blocking(cell) or _is_safe_zone(cell):
-				continue
-			if randf() < density:
-				map.set_cell(cell, MapData.CellType.SOFT_WALL)
+			if not map.is_blocking(cell) and not _is_safe_zone(cell):
+				candidates.append(cell)
+	candidates.shuffle()
+	for cell in candidates:
+		if randf() >= density:
+			continue
+		map.set_cell(cell, MapData.CellType.SOFT_WALL)
+		if not _is_connected(map):
+			map.set_cell(cell, MapData.CellType.EMPTY)
 
 
 func _is_connected(map: MapData) -> bool:
