@@ -196,10 +196,10 @@ func detonate_bomb(bomb: Bomb) -> void:
 	_trigger_explosion(cell, owner.fire_range if owner else 1)
 
 
-func _trigger_explosion(origin: Vector2i, range: int) -> void:
+func get_explosion_cells(origin: Vector2i, fire_range: int) -> Array[Vector2i]:
 	var affected: Array[Vector2i] = [origin]
 	for d in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
-		for i in range(1, range + 1):
+		for i in range(1, fire_range + 1):
 			var cell: Vector2i = origin + d * i
 			if not map_data.in_bounds(cell):
 				break
@@ -208,6 +208,143 @@ func _trigger_explosion(origin: Vector2i, range: int) -> void:
 			affected.append(cell)
 			if map_data.is_soft_wall(cell):
 				break
+	return affected
+
+
+func get_danger_cells(extra_bomb: Dictionary = {}) -> Dictionary:
+	var danger: Dictionary = {}
+	for bomb in bombs.values():
+		var b: Bomb = bomb
+		var owner: Bomber = b.owner_bomber
+		var r: int = owner.fire_range if owner else 1
+		for cell in get_explosion_cells(b.grid_pos, r):
+			danger[cell] = true
+	if extra_bomb.has("cell") and extra_bomb.has("range"):
+		for cell in get_explosion_cells(extra_bomb["cell"], int(extra_bomb["range"])):
+			danger[cell] = true
+	return danger
+
+
+func is_cell_in_blast(cell: Vector2i) -> bool:
+	return get_danger_cells().has(cell)
+
+
+func get_next_step_toward(bomber: Bomber, goal: Vector2i, avoid_blast: bool) -> Vector2i:
+	var path: Array[Vector2i] = find_path(bomber, goal, avoid_blast)
+	if path.size() < 2:
+		return bomber.grid_pos
+	return path[1]
+
+
+func _escape_bfs(bomber: Bomber, danger: Dictionary, bomb_cell: Vector2i) -> Dictionary:
+	var start: Vector2i = bomber.grid_pos
+	var distances: Dictionary = {start: 0}
+	var queue: Array[Vector2i] = [start]
+	while not queue.is_empty():
+		var c: Vector2i = queue.pop_front()
+		var steps: int = int(distances[c])
+		for d in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+			var n: Vector2i = c + d
+			if distances.has(n):
+				continue
+			if not map_data.in_bounds(n):
+				continue
+			if map_data.is_blocking(n):
+				continue
+			if bombs.has(n) and n != bomb_cell:
+				continue
+			distances[n] = steps + 1
+			queue.append(n)
+	return distances
+
+
+func _can_walk_for_escape(bomber: Bomber, cell: Vector2i, bomb_cell: Vector2i) -> bool:
+	if not map_data.in_bounds(cell):
+		return false
+	if map_data.is_blocking(cell):
+		return false
+	if bombs.has(cell) and cell != bomb_cell:
+		return false
+	return true
+
+
+func _is_viable_escape_cell(bomber: Bomber, cell: Vector2i, danger: Dictionary, bomb_cell: Vector2i) -> bool:
+	if danger.has(cell):
+		return false
+	for d in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		var n: Vector2i = cell + d
+		if not _can_walk_for_escape(bomber, n, bomb_cell):
+			continue
+		if not danger.has(n):
+			return true
+	return false
+
+
+func _pick_best_escape_cell(
+	bomber: Bomber,
+	distances: Dictionary,
+	danger: Dictionary,
+	bomb_cell: Vector2i,
+	max_steps: int
+) -> Vector2i:
+	var best: Vector2i = Vector2i(-1, -1)
+	var best_steps: int = 99999
+	var best_dist_from_bomb: int = -1
+	for cell in distances.keys():
+		if not _is_viable_escape_cell(bomber, cell, danger, bomb_cell):
+			continue
+		var steps: int = int(distances[cell])
+		if steps > max_steps:
+			continue
+		var dist_from_bomb: int = absi(cell.x - bomb_cell.x) + absi(cell.y - bomb_cell.y)
+		if (
+			steps < best_steps
+			or (
+				steps == best_steps
+				and dist_from_bomb > best_dist_from_bomb
+			)
+		):
+			best_steps = steps
+			best_dist_from_bomb = dist_from_bomb
+			best = cell
+	return best
+
+
+func can_safely_place_bomb(bomber: Bomber) -> bool:
+	if bomber == null or not bomber.is_alive or map_data == null:
+		return false
+	if bomber._is_moving:
+		return false
+	if bomber.active_bombs >= bomber.bomb_capacity:
+		return false
+	var bomb_cell: Vector2i = bomber.get_bomb_placement_cell()
+	if bombs.has(bomb_cell):
+		return false
+	var danger := get_danger_cells({"cell": bomb_cell, "range": bomber.fire_range})
+	var distances := _escape_bfs(bomber, danger, bomb_cell)
+	var max_steps: int = int(floor(GameConstants.BOMB_FUSE_SEC / bomber.get_move_duration()))
+	return _pick_best_escape_cell(bomber, distances, danger, bomb_cell, max_steps) != Vector2i(-1, -1)
+
+
+func find_escape_cell_after_bomb(bomber: Bomber) -> Vector2i:
+	if bomber == null or not bomber.is_alive:
+		return Vector2i(-1, -1)
+	var bomb_cell: Vector2i = Vector2i(-1, -1)
+	for cell in bombs.keys():
+		var b: Bomb = bombs[cell]
+		if b.owner_bomber == bomber:
+			bomb_cell = cell
+			break
+	if bomb_cell == Vector2i(-1, -1):
+		return Vector2i(-1, -1)
+	var danger := get_danger_cells()
+	var distances := _escape_bfs(bomber, danger, bomb_cell)
+	var max_steps: int = int(floor(GameConstants.BOMB_FUSE_SEC / bomber.get_move_duration()))
+	return _pick_best_escape_cell(bomber, distances, danger, bomb_cell, max_steps)
+
+
+func _trigger_explosion(origin: Vector2i, range: int) -> void:
+	var affected: Array[Vector2i] = get_explosion_cells(origin, range)
 	var explosion: Explosion = EXPLOSION_SCENE.instantiate()
 	_effects_root.add_child(explosion)
 	explosion.setup(self, affected)
@@ -284,10 +421,13 @@ func find_safe_cell(bomber: Bomber, params: Dictionary) -> Vector2i:
 	return Vector2i(-1, -1)
 
 
-func find_path(bomber: Bomber, goal: Vector2i) -> Array[Vector2i]:
+func find_path(bomber: Bomber, goal: Vector2i, avoid_blast: bool = false) -> Array[Vector2i]:
 	var start: Vector2i = bomber.grid_pos
 	if start == goal:
 		return [start]
+	var danger: Dictionary = {}
+	if avoid_blast:
+		danger = get_danger_cells()
 	var queue: Array[Vector2i] = [start]
 	var came_from: Dictionary = {start: start}
 	while not queue.is_empty():
@@ -297,6 +437,8 @@ func find_path(bomber: Bomber, goal: Vector2i) -> Array[Vector2i]:
 		for d in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
 			var n: Vector2i = c + d
 			if came_from.has(n):
+				continue
+			if avoid_blast and danger.has(n) and n != goal:
 				continue
 			if n != goal and not can_move_to(bomber, n):
 				continue
