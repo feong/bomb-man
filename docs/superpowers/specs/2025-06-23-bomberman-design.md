@@ -1,285 +1,377 @@
-# Bomberman v1 Design Spec
+# 炸弹人 v1 设计规格
 
-**Date:** 2025-06-23  
-**Status:** Approved  
-**Engine:** Godot 4.x (latest stable) + GDScript  
-**Platform:** Desktop (Windows / macOS / Linux)
-
----
-
-## 1. Overview
-
-### Goal
-
-Build a playable single-player Bomberman-style game in Godot 4.x: one human vs 1–3 AI opponents on a grid-based arena with bombs, destructible walls, power-ups, and elimination victory rules.
-
-### Success Criteria
-
-- Player can navigate main menu → settings → match → win/lose → restart or return to menu.
-- Core mechanics work: grid movement, bomb placement, chain explosions, soft-wall destruction, power-up drops and pickup.
-- AI difficulty tiers (Easy / Normal / Hard) produce noticeably different behavior.
-- Settings (AI count, difficulty, volume) persist between sessions.
-- All UI text is in Chinese.
-
-### Out of Scope (v1)
-
-- Online or local multiplayer between humans
-- Gamepad support
-- Custom key rebinding
-- Multiple map templates
-- Kick bomb, pierce bomb, remote bomb
-- Leaderboards, tutorials, replay
-- Separate BGM/SFX volume sliders
+**日期：** 2025-06-23  
+**状态：** 已批准  
+**引擎：** Godot 4.x（最新稳定版）+ GDScript  
+**平台：** 桌面（Windows / macOS / Linux）
 
 ---
 
-## 2. Architecture
+## 1. 概述
 
-### Approach: Hybrid Grid + Scene Entities (Option C)
+### 目标
 
-- `MapGenerator` produces a 2D grid data structure.
-- `TileMapLayer` renders static floor, hard walls, and soft walls.
-- Dynamic entities (players, AI, bombs, power-ups, explosions) are independent scene nodes.
-- `GameManager` coordinates match state, win/lose, and entity lifecycle.
+在 Godot 4.x 中实现可玩的单人炸弹人游戏：1 名玩家对战 1–3 个 AI，网格竞技场，包含炸弹、可破坏软墙、道具与生存淘汰胜负规则。
 
-This separates game logic from presentation, supports placeholder art with future reskinning, and keeps AI/pathfinding logic straightforward.
+### 成功标准
 
-### Scene Flow
+- 玩家可完成完整流程：主菜单 → 设置 → 对战 → 胜负 → 重开或返回菜单。
+- 核心机制正常工作：网格移动、放炸弹、连锁爆炸、软墙破坏、道具掉落与拾取。
+- AI 三档难度（简单 / 普通 / 困难）行为差异可感知。
+- 设置（AI 数量、难度、音量）在会话间持久保存。
+- 所有游戏内 UI 文案为中文。
+
+### v1 不在范围内
+
+- 真人在线或本地多人对战
+- 手柄支持
+- 自定义键位
+- 多张地图模板
+- 踢炸弹、穿墙弹、遥控炸弹
+- 排行榜、教程、回放
+- BGM 与音效分开调节音量
+
+---
+
+## 2. 架构
+
+### 方案：混合网格 + 场景实体（方案 C）
+
+- `MapGenerator` 生成二维网格数据结构。
+- `TileMapLayer` 渲染静态地面、硬墙、软墙。
+- 动态实体（玩家、AI、炸弹、道具、爆炸）为独立场景节点。
+- `GameManager` 协调对局状态、胜负判定与实体生命周期。
+
+该方案将游戏逻辑与表现分离，支持占位美术与后续换皮，AI 与寻路逻辑也更直观。
+
+### 场景流程
 
 ```
-MainMenu → Settings → Game → GameOver
-                ↑___________|
-         (restart or menu)
+主菜单 → 设置 → 游戏 → 结束界面
+           ↑___________|
+        （重开或回菜单）
 ```
 
-### Autoloads
+### Autoload 单例
 
-| Name | Responsibility |
-|------|----------------|
-| `GameSettings` | Load/save AI count (1–3), difficulty, master volume via `ConfigFile` |
-| `AudioManager` | Play BGM and SFX; respect master volume |
+| 名称 | 职责 |
+|------|------|
+| `GameSettings` | 通过 `ConfigFile` 加载/保存 AI 数量（1–3）、难度、主音量 |
+| `AudioManager` | 播放 BGM 与音效；响应主音量设置 |
 
-### Core Modules (Game Scene)
+### 游戏场景核心模块
 
-| Module | Responsibility |
-|--------|----------------|
-| `GameManager` | Match state machine: countdown → playing → ended |
-| `MapGenerator` | Generate 13×11 grid with hard walls, random soft walls, connectivity check |
-| `MapView` | Render grid via `TileMapLayer` |
-| `Bomber` (base) | Grid movement, bomb stats, bomb-pass rule state |
-| `Player` | Keyboard input (arrows / WASD, Space) |
-| `AIController` | Difficulty-parameterized AI decisions |
-| `Bomb` | Fuse timer, detonation, chain trigger |
-| `Explosion` | Cross-shaped blast calculation and damage |
-| `Powerup` | Drop type, pickup collision, stat application |
+| 模块 | 职责 |
+|------|------|
+| `GameManager` | 对局状态机：倒计时 → 进行中 → 结束 |
+| `MapGenerator` | 生成 13×11 网格（硬墙 + 随机软墙 + 连通性校验） |
+| `MapView` | 通过 `TileMapLayer` 渲染地图 |
+| `Bomber`（基类） | 网格移动、炸弹属性 |
+| `Player` | 键盘输入（方向键 / WASD、空格） |
+| `AIController` | 按难度参数驱动的 AI 决策 |
+| `Bomb` | 引信、引爆、连锁；穿弹资格（`allowed_overlappers`） |
+| `Explosion` | 十字形爆炸范围计算与伤害 |
+| `Powerup` | 掉落物类型、拾取碰撞、属性加成 |
 
-### Coordinate System
+### 坐标系
 
-- Grid: 13 columns × 11 rows (width × height).
-- Tile size: 32×32 pixels.
-- Map pixel size: 416×352.
-- Window: 960×720 (centered playfield + HUD margins).
-- Grid origin: top-left cell (0, 0).
-- Conversion helpers: `grid_to_world(cell: Vector2i) -> Vector2`, `world_to_grid(pos: Vector2) -> Vector2i`.
-
----
-
-## 3. Gameplay Rules
-
-### Match Setup
-
-- Default: 1 human vs 3 AI.
-- AI count configurable in settings: 1, 2, or 3.
-- All AI share the difficulty selected in settings (default: Normal).
-- Spawn positions: four corners of the map.
-- Empty player slots are not used; only active AI count spawn.
-
-### Map Generation
-
-- Fixed outer ring of hard walls.
-- Fixed checkerboard hard-wall pillars (classic Bomberman pattern).
-- Soft walls randomly placed on eligible empty cells at ~55% density.
-- Safe zones: no soft walls within 2 Manhattan-distance cells of each spawn corner.
-- Connectivity validation: ensure all spawn corners can reach each other via walkable paths (BFS). Regenerate up to 10 times; on failure, reduce soft-wall density slightly and retry.
-
-### Cell Types (Runtime Grid)
-
-| Type | Walkable | Destructible | Notes |
-|------|----------|--------------|-------|
-| Empty | Yes | No | Floor |
-| Hard wall | No | No | Permanent |
-| Soft wall | No | Yes | Destroyed by explosion |
-| Bomb | No* | No | *See bomb-pass rule |
-| Power-up | Yes | No | Destroyed if caught in explosion |
-
-### Movement
-
-- Four-directional grid logic with visual lerp interpolation between cell centers.
-- Only one direction processed at a time (no diagonal).
-- Speed stat increases lerp speed (base + increments per Speed+ pickup, max 3 tiers).
-- Movement blocked by hard walls, soft walls, other bombers, and bombs per bomb-pass rule.
-
-### Bombs
-
-- Place bomb on current cell if: active bombs < bomb count stat, and cell has no existing bomb.
-- One bomb per key press (no hold-to-spam).
-- Fuse: 2.5 seconds.
-- Explosion: cross shape, radius = fire power stat (default 1, max 8).
-- Hard walls stop blast propagation.
-- Soft walls in blast are destroyed; blast stops at soft wall (does not penetrate).
-- Chain reaction: bomb hit by explosion detonates immediately.
-- Bombs and explosions kill any bomber standing in affected cells.
-
-### Bomb-Pass Rule (Custom)
-
-Implementation semantics:
-
-1. When a bomber places a bomb, they occupy the same cell as the bomb.
-2. The bomber may leave that cell normally on their next move (moving to an adjacent empty cell).
-3. **Once the bomber has left the cell where they placed their first bomb**, set `bombs_solid = true` on that bomber permanently for the rest of the match.
-4. When `bombs_solid` is true, the bomber cannot enter any cell containing a bomb (own or others').
-5. AI follows the same rule.
-
-### Power-Ups
-
-Dropped when a soft wall is destroyed (20% chance). Random among:
-
-| Power-up | Effect | Max |
-|----------|--------|-----|
-| Bomb+ | +1 max simultaneous bombs | 8 |
-| Fire+ | +1 explosion radius | 8 |
-| Speed+ | +1 movement speed tier | 3 |
-
-- Pickup on contact (player walks over; AI pathing targets power-ups).
-- Uncollected power-ups are destroyed if caught in an explosion.
-
-### Victory / Defeat
-
-- **Win:** Player eliminates all AI opponents.
-- **Lose:** Player is killed by an explosion.
-- On end: show Chinese win/lose screen with restart and main-menu options.
-
-### Match Start
-
-- 3-2-1 countdown displayed on screen.
-- All bombers and AI frozen during countdown.
-- Match begins at "开始!" (or "1" completion); bombers can move and place bombs.
+- 网格：13 列 × 11 行（宽 × 高）。
+- 格子尺寸：32×32 像素。
+- 地图像素尺寸：416×352。
+- 窗口：960×720（游戏区域居中 + HUD 边距）。
+- 网格原点：左上角单元格 (0, 0)。
+- 转换辅助函数：`grid_to_world(cell: Vector2i) -> Vector2`、`world_to_grid(pos: Vector2) -> Vector2i`。
 
 ---
 
-## 4. AI System
+## 3. 玩法规则
 
-Single `AIController` with difficulty parameters from `GameSettings`:
+### 对局设置
 
-| Parameter | Easy | Normal | Hard |
-|-----------|------|--------|------|
-| Decision interval (sec) | 0.5 | 0.3 | 0.15 |
-| Danger zone awareness | Low (1 cell margin) | Medium (blast radius) | High (blast radius + 1) |
-| Chase player probability | 0.2 | 0.5 | 0.8 |
-| Power-up seek probability | 0.1 | 0.4 | 0.6 |
-| Random movement weight | High | Medium | Low |
+- 默认：1 名玩家 vs 3 个 AI。
+- AI 数量可在设置中配置：1、2 或 3。
+- 所有 AI 共用设置中选定的难度（默认：普通）。
+- 出生点：地图四角。
+- 不使用空玩家槽位；仅生成配置数量的 AI。
 
-### Behavior Loop (each decision tick)
+### 地图生成
 
-1. If current cell is or will be dangerous, flee to nearest safe cell (BFS).
-2. Else if power-up visible and seek roll passes, path toward nearest power-up.
-3. Else if player nearby and chase roll passes, path toward player.
-4. Else move toward nearest soft wall or random safe cell.
-5. Place bomb if adjacent to soft wall or player and escape route exists (Hard: also attempt traps).
+- 外圈固定硬墙。
+- 固定棋盘格硬墙柱（经典炸弹人布局）。
+- 在符合条件的空格上随机放置软墙，密度约 55%。
+- 安全区：每个出生点周围曼哈顿距离 2 格内不生成软墙。
+- 连通性校验：确保各出生角之间可通过可行走路径互相到达（BFS）。最多重试 10 次；失败时略微降低软墙密度后重试。
 
-Pathfinding: BFS on walkable cells respecting `bombs_solid` and current danger map. Grid is 13×11; no external pathfinding library needed.
+### 单元格类型（运行时网格）
+
+| 类型 | 可行走 | 可破坏 | 说明 |
+|------|--------|--------|------|
+| 空地 | 是 | 否 | 地面 |
+| 硬墙 | 否 | 否 | 永久障碍 |
+| 软墙 | 否 | 是 | 被爆炸摧毁 |
+| 炸弹 | 否* | 否 | *见穿弹规则 |
+| 道具 | 是 | 否 | 被爆炸波及时摧毁 |
+
+### 移动
+
+- 四方向网格逻辑，画面在格子中心之间做 lerp 插值。
+- 同时只处理一个方向（不支持斜向）。
+- 速度属性提升 lerp 速度（基础值 + 每个 Speed+ 的增量，最多 3 档）。
+- 移动被硬墙、软墙及炸弹（按穿弹规则）阻挡。
+- **可走入其他炸弹人所在格**（不被身体阻挡）；进入后触发同格阵亡判定（见下文「身体接触」）。
+
+### 身体接触（同格阵亡）
+
+**阵营：** 玩家为一方；所有 AI 为同一阵营（队友），AI 之间不互相伤害。
+
+**规则：仅玩家与 AI 同格时，玩家阵亡。**
+
+| 情况 | 结果 |
+|------|------|
+| 玩家与 AI 处于同一格 | **玩家阵亡**（AI 存活） |
+| AI 与 AI 处于同一格 | **均存活**（同阵营，可同格共存） |
+
+**触发时机：** 某炸弹人完成移动、格子坐标更新后，若该格上同时存在玩家与 AI，立即判定玩家阵亡。
+
+**说明：**
+
+- 死亡原因除爆炸外，新增「身体接触」（仅针对玩家）。
+- AI 寻路可将「撞向玩家」视为进攻手段（困难档可提高此倾向）。
+- AI 队友可占据同一格；放弹时同格所有 AI 均记入该炸弹的 `allowed_overlappers`。
+
+### 炸弹
+
+- 在当前格放炸弹的条件：已激活炸弹数 < 炸弹数量属性，且该格无现有炸弹。
+- 一次按键放一颗（不支持按住连发）。
+- 引信：2.5 秒。
+- 爆炸：十字形，半径 = 火力属性（默认 1，上限 8）。
+- 硬墙阻挡爆炸传播。
+- 爆炸波及软墙时将其摧毁；爆炸在软墙处停止（不穿透）。
+- 连锁反应：炸弹被爆炸波及时立即引爆。
+- 爆炸范围内的炸弹人一律阵亡。
+
+### 穿弹规则（定制，炸弹实体驱动）
+
+**设计原则：** 穿弹资格放在 **炸弹（`Bomb`）** 上，而非炸弹人身上。炸弹记录「谁可以与该炸弹重叠」；炸弹人离开该格后失去对该炸弹的重叠资格。
+
+**核心原则：**
+
+1. **禁止从外部移动进入炸弹格。** 相邻格有炸弹时，不可走入（例：脚下有刚放的炸弹，左侧相邻格也有炸弹 → 不能走到左侧）。
+2. **重叠即可容身。** 放弹瞬间，该格上的炸弹人记入该炸弹的 `allowed_overlappers`；在**仍与该炸弹同格重叠**期间，可站在炸弹格上。
+3. **离开即失效。** 炸弹人一旦移动离开该炸弹所在格，从该炸弹的 `allowed_overlappers` 中移除；之后不可再与该炸弹重叠（不可走入、不可返回）。
+
+> **与身体接触的关系：** 玩家与 AI 无法稳定同格（玩家会阵亡）。AI 队友可同格共存，故同格放弹时 `allowed_overlappers` 可包含多名 AI。
+
+**示例：**
+
+| 场景 | 结果 |
+|------|------|
+| 脚下刚放炸弹，左侧邻格有炸弹 | 不能走到左侧炸弹格 |
+| 脚下刚放炸弹，上方邻格为空 | 可移动到上方离开脚下炸弹 |
+| 离开脚下炸弹后 | 不可再走入任何已有炸弹的格子 |
+| AI 走入玩家所在格 | 玩家阵亡，AI 留在该格 |
+| 玩家走入 AI 所在格 | 玩家阵亡 |
+| 两名 AI 走入同一格 | 均存活，可同格共存 |
+| 两名 AI 同格，其中一方放弹 | 两名 AI 均在 `allowed_overlappers` 中，均可重叠该炸弹直至离开 |
+
+**状态字段（`Bomb`）：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `grid_pos` | `Vector2i` | 炸弹所在格 |
+| `owner` | `Bomber` | 放置者 |
+| `allowed_overlappers` | `Array[Bomber]` | 放弹瞬间同格的所有炸弹人；离开该格时从中移除 |
+
+**辅助方法（`Bomb`）：**
+
+```gdscript
+func can_overlap(bomber: Bomber) -> bool:
+    return allowed_overlappers.has(bomber)
+
+func on_bomber_left(bomber: Bomber) -> void:
+    allowed_overlappers.erase(bomber)
+```
+
+**移动判定（`GameManager` / `Bomber`）：**
+
+```gdscript
+func can_move_to(bomber: Bomber, target: Vector2i) -> bool:
+    if grid.has_bomb_at(target):
+        return false
+    if not grid.is_walkable(bomber, target):  # 硬墙、软墙
+        return false
+    return true  # 允许走入其他炸弹人所在格，移动完成后触发身体接触判定
+
+func resolve_occupancy_after_move(bomber: Bomber) -> void:
+    var occupants := get_bombers_at(bomber.grid_pos)
+    var player: Bomber = null
+    var has_ai := false
+    for b in occupants:
+        if b.is_player:
+            player = b
+        else:
+            has_ai = true
+    if player and has_ai:
+        player.die("contact")  # 仅玩家 vs AI 同格 → 玩家阵亡
+    # AI 与 AI 同格：不做处理（同阵营共存）
+
+func on_bomber_placed_bomb(bomb: Bomb) -> void:
+    var cell := bomb.grid_pos
+    for b in get_bombers_at(cell):
+        bomb.allowed_overlappers.append(b)
+
+func on_bomber_exited_cell(bomber: Bomber, cell: Vector2i) -> void:
+    if grid.has_bomb_at(cell):
+        grid.get_bomb_at(cell).on_bomber_left(bomber)
+```
+
+**与旧方案对比（炸弹人持状态）的优势：**
+
+- 规则集中在炸弹实体，职责清晰
+- 每颗炸弹独立追踪资格，多颗炸弹并存时语义明确
+- 预留 `allowed_overlappers` 多人扩展；AI 同格放弹时自动支持多名重叠者
+
+### 道具
+
+软墙被破坏时掉落（20% 概率），随机为以下之一：
+
+| 道具 | 效果 | 上限 |
+|------|------|------|
+| Bomb+ | 可同时放置的炸弹数 +1 | 8 |
+| Fire+ | 爆炸半径 +1 | 8 |
+| Speed+ | 移动速度 +1 档 | 3 |
+
+- 接触即拾取（玩家走过；AI 寻路目标包含道具）。
+- 未被拾取的道具若被爆炸波及则摧毁。
+
+### 胜负
+
+- **胜利：** 玩家消灭所有 AI。
+- **失败：** 玩家被爆炸击杀，**或与 AI 同格（身体接触）**。
+- 结束时显示中文胜负界面，提供重开与返回主菜单。
+
+### 开局
+
+- 屏幕中央显示 3-2-1 倒计时。
+- 倒计时期间所有炸弹人（含 AI）冻结。
+- 显示「开始!」后（倒计时结束），允许移动与放炸弹。
 
 ---
 
-## 5. UI / UX (Chinese)
+## 4. AI 系统
 
-### Main Menu
+单一 `AIController`，参数来自 `GameSettings` 难度：
+
+| 参数 | 简单 | 普通 | 困难 |
+|------|------|------|------|
+| 决策间隔（秒） | 0.5 | 0.3 | 0.15 |
+| 危险区感知 | 低（1 格边距） | 中（爆炸半径） | 高（爆炸半径 +1） |
+| 追击玩家概率 | 0.2 | 0.5 | 0.8 |
+| 寻道具概率 | 0.1 | 0.4 | 0.6 |
+| 随机移动权重 | 高 | 中 | 低 |
+
+### 行为循环（每次决策 tick）
+
+1. 若当前格或即将处于危险区，BFS 逃向最近安全格。
+2. 否则若可见道具且寻道具判定通过，向最近道具寻路。
+3. 否则若玩家在附近且追击判定通过，向玩家寻路。
+4. 否则向最近软墙移动，或随机选择安全格。
+5. 若邻接软墙或玩家且有逃生路线，则放炸弹（困难档：额外尝试堵路）。
+
+寻路：在可行走格上用 BFS；炸弹格不可通过移动进入。AI 队友所在格视为可进入（同格共存）。放弹时同格 AI 均可进入 `allowed_overlappers`。同时尊重当前危险图。网格为 13×11，无需外部寻路库。
+
+---
+
+## 5. 界面与体验（中文）
+
+### 主菜单
 
 - 开始游戏
 - 设置
-- 退出 (desktop only; hidden or no-op on web if ever ported)
+- 退出（仅桌面；若移植 Web 可隐藏或无操作）
 
-### Settings
+### 设置
 
-- AI 数量: 1 / 2 / 3 (default 3)
-- 难度: 简单 / 普通 / 困难 (default 普通)
-- 主音量: slider 0–100 (default 80)
+- AI 数量：1 / 2 / 3（默认 3）
+- 难度：简单 / 普通 / 困难（默认 普通）
+- 主音量：滑条 0–100（默认 80）
 - 返回
 
-Settings persist to `user://settings.cfg`.
+设置持久化至 `user://settings.cfg`。
 
-### In-Game HUD
+### 对战 HUD
 
-- Top bar: `剩余敌人: N`
-- Center overlay during countdown: 3, 2, 1, 开始!
+- 顶栏：`剩余敌人: N`
+- 倒计时中央叠层：3、2、1、开始!
 
-### Pause Menu (Esc)
+### 暂停菜单（Esc）
 
 - 继续
 - 重新开始
 - 返回主菜单
 
-### Game Over
+### 结束界面
 
 - 胜利! / 失败!
 - 重新开始
 - 返回主菜单
 
-### Controls
+### 操作
 
-| Action | Keys |
-|--------|------|
-| Move | Arrow keys or WASD |
-| Place bomb | Space |
-| Pause | Esc |
-
----
-
-## 6. Audio
-
-### Sound Effects (6)
-
-1. Place bomb
-2. Explosion
-3. Pick up power-up
-4. Player death
-5. Victory
-6. Defeat
-
-### Music
-
-- One looping battle BGM during match.
-- Menu can be silent or reuse battle BGM at lower volume.
-
-### Source
-
-- Free asset packs (Kenney, OpenGameArt) or minimal placeholder tones.
-- Master volume slider controls all audio.
+| 动作 | 按键 |
+|------|------|
+| 移动 | 方向键或 WASD |
+| 放炸弹 | 空格 |
+| 暂停 | Esc |
 
 ---
 
-## 7. Visual Style (Placeholder)
+## 6. 音频
 
-| Element | Placeholder |
-|---------|-------------|
-| Floor | Dark green `ColorRect` / tile |
-| Hard wall | Dark gray |
-| Soft wall | Light brown |
-| Player | Red square/sprite |
-| AI | Blue, green, yellow |
-| Bomb | Black circle |
-| Explosion | Orange cross animation (brief) |
-| Power-ups | Colored icons: white (Bomb+), red (Fire+), cyan (Speed+) |
+### 音效（6 个）
 
-Node structure uses `Sprite2D` or `ColorRect` with resource paths in a config dict so art can be swapped without logic changes.
+1. 放炸弹
+2. 爆炸
+3. 拾取道具
+4. 玩家死亡
+5. 胜利
+6. 失败
+
+### 音乐
+
+- 对战时 1 条循环 BGM。
+- 主菜单可静音，或以较低音量复用对战 BGM。
+
+### 素材来源
+
+- 免费素材包（Kenney、OpenGameArt）或极简占位音。
+- 主音量滑条统一控制所有音频。
 
 ---
 
-## 8. Project File Structure
+## 7. 视觉风格（占位）
+
+| 元素 | 占位方案 |
+|------|----------|
+| 地面 | 深绿色 `ColorRect` / 瓦片 |
+| 硬墙 | 深灰色 |
+| 软墙 | 浅棕色 |
+| 玩家 | 红色方块 / sprite |
+| AI | 蓝、绿、黄 |
+| 炸弹 | 黑色圆形 |
+| 爆炸 | 橙色十字动画（短暂） |
+| 道具 | 彩色图标：白（Bomb+）、红（Fire+）、青（Speed+） |
+
+节点使用 `Sprite2D` 或 `ColorRect`，资源路径放在配置字典中，便于换皮而不改逻辑。
+
+---
+
+## 8. 项目文件结构
 
 ```
 godot-cursor-game/
 ├── project.godot
+├── AGENTS.md
 ├── autoload/
 │   ├── game_settings.gd
 │   └── audio_manager.gd
@@ -318,39 +410,43 @@ godot-cursor-game/
 
 ---
 
-## 9. Error Handling & Edge Cases
+## 9. 错误处理与边界情况
 
-| Case | Handling |
+| 情况 | 处理方式 |
 |------|----------|
-| Map generation fails connectivity | Retry up to 10 times with reduced density |
-| Move into blocked cell | Ignore input; no position change |
-| Place bomb when at max or cell occupied | Ignore input |
-| Scene change mid-match | `GameManager` frees all bombs, explosions, power-ups |
-| Player dies while bombs active | Bombs remain; show game over immediately |
-| Last AI dies | Trigger win immediately |
+| 地图生成连通性失败 | 最多重试 10 次，并降低密度 |
+| 移向被阻挡的格子 | 忽略输入，位置不变 |
+| 已达炸弹上限或格子已有炸弹 | 忽略放弹输入 |
+| 对局中途切换场景 | `GameManager` 释放所有炸弹、爆炸、道具节点 |
+| 玩家死亡时场上仍有炸弹 | 炸弹继续存在；立即显示失败 |
+| 两名 AI 同时移动到同一格 | 均存活（同阵营） |
+| 玩家与 AI 同时移动到同一格 | 玩家阵亡 |
+| 最后一个 AI 死亡 | 立即触发胜利 |
 
 ---
 
-## 10. Testing
+## 10. 测试
 
-Manual test checklist for v1:
+v1 手动测试清单：
 
-- [ ] Grid movement feels smooth; direction changes work
-- [ ] Bomb fuse, cross explosion, and chain reactions
-- [ ] Soft walls destroyed; 20% power-up drop rate feels reasonable
-- [ ] Bomb-pass rule: can leave first bomb cell; cannot enter any bomb cell afterward
-- [ ] Power-ups apply stats and respect caps
-- [ ] Explosions destroy uncollected power-ups
-- [ ] AI Easy/Normal/Hard behave differently
-- [ ] 3-2-1 countdown freezes all entities
-- [ ] Win and lose screens; restart and menu navigation
-- [ ] Settings persist after restart
+- [ ] 网格移动手感顺畅，转向正常
+- [ ] 炸弹引信、十字爆炸、连锁反应
+- [ ] 软墙可被摧毁；20% 道具掉落率合理
+- [ ] 身体接触：AI 走入玩家格或玩家走入 AI 格 → 玩家阵亡
+- [ ] AI 同格：两名 AI 同格均存活；同格放弹后双方均可重叠炸弹
+- [ ] 穿弹规则（炸弹驱动）：脚下与左侧均有炸弹时不能走入左侧；可离开脚下炸弹到空格
+- [ ] 道具加成生效且遵守上限
+- [ ] 爆炸可摧毁未拾取道具
+- [ ] AI 简单 / 普通 / 困难行为有差异
+- [ ] 3-2-1 倒计时期间全员冻结
+- [ ] 胜负界面；重开与菜单导航
+- [ ] 设置重启后仍保留
 
 ---
 
-## 11. Technical Notes
+## 11. 技术说明
 
-- Renderer: Compatibility (friendly for placeholder art and broad hardware support).
-- Godot version: 4.x latest stable.
-- Language: GDScript with type hints.
-- Input: Godot Input Map (`move_up`, `move_down`, `move_left`, `move_right`, `place_bomb`, `pause`).
+- 渲染器：Compatibility（利于占位美术与广泛硬件兼容）。
+- Godot 版本：4.x 最新稳定版。
+- 脚本语言：GDScript（带类型标注）。
+- 输入映射：`move_up`、`move_down`、`move_left`、`move_right`、`place_bomb`、`pause`。
