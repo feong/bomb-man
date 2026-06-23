@@ -212,10 +212,6 @@ func _trigger_explosion(origin: Vector2i, range: int) -> void:
 	var chain_bombs: Array[Bomb] = []
 	var map_dirty: bool = false
 	for cell in affected:
-		if map_data.is_soft_wall(cell):
-			map_data.destroy_soft_wall(cell)
-			map_dirty = true
-			_try_spawn_powerup(cell)
 		if bombs.has(cell):
 			chain_bombs.append(bombs[cell])
 		if powerups.has(cell):
@@ -225,6 +221,10 @@ func _trigger_explosion(origin: Vector2i, range: int) -> void:
 		for b in bombers:
 			if b.is_alive and b.grid_pos == cell:
 				b.die("explosion")
+		if map_data.is_soft_wall(cell):
+			map_data.destroy_soft_wall(cell)
+			map_dirty = true
+			_try_spawn_powerup(cell)
 	if map_dirty:
 		_map_view.render(map_data)
 	for chained in chain_bombs:

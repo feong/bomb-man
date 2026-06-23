@@ -74,7 +74,7 @@ func try_move(dir: Vector2i) -> void:
 
 
 func try_place_bomb() -> void:
-	if can_act() and not _is_moving:
+	if can_act():
 		game_manager.place_bomb(self)
 
 
