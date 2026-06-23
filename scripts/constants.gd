@@ -1,8 +1,8 @@
 class_name GameConstants
 extends RefCounted
 
-const GRID_WIDTH := 13
-const GRID_HEIGHT := 11
+const GRID_WIDTH := 21
+const GRID_HEIGHT := 17
 const TILE_SIZE := 32
 const MAP_PIXEL_SIZE := Vector2i(GRID_WIDTH * TILE_SIZE, GRID_HEIGHT * TILE_SIZE)
 const WINDOW_SIZE := Vector2i(960, 720)
