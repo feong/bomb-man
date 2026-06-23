@@ -167,12 +167,14 @@ func place_bomb(bomber: Bomber) -> void:
 		return
 	if bomber.active_bombs >= bomber.bomb_capacity:
 		return
-	var cell: Vector2i = bomber.grid_pos
+	var cell: Vector2i = bomber.get_bomb_placement_cell()
 	if bombs.has(cell):
 		return
 	var bomb: Bomb = BOMB_SCENE.instantiate()
 	_bombs_root.add_child(bomb)
 	var overlappers: Array[Bomber] = get_bombers_at(cell)
+	if not overlappers.has(bomber):
+		overlappers.append(bomber)
 	bomb.setup(self, cell, bomber, overlappers)
 	bombs[cell] = bomb
 	bomber.active_bombs += 1

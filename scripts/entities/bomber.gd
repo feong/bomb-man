@@ -73,6 +73,12 @@ func try_move(dir: Vector2i) -> void:
 	position = _move_from
 
 
+func get_bomb_placement_cell() -> Vector2i:
+	if _is_moving:
+		return _previous_cell
+	return grid_pos
+
+
 func try_place_bomb() -> void:
 	if can_act():
 		game_manager.place_bomb(self)

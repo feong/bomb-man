@@ -26,11 +26,16 @@ static func run(failures: PackedStringArray) -> void:
 
 	bomber.try_place_bomb()
 
-	var expected_cell := start_cell + Vector2i.RIGHT
-	if not gm.bombs.has(expected_cell):
+	if not gm.bombs.has(start_cell):
 		failures.append(
-			"place_bomb_while_moving: bomb should exist at logical grid cell %s while moving"
-			% expected_cell
+			"place_bomb_while_moving: bomb should be placed at departure cell %s while moving"
+			% start_cell
+		)
+	var destination_cell := start_cell + Vector2i.RIGHT
+	if gm.bombs.has(destination_cell):
+		failures.append(
+			"place_bomb_while_moving: bomb should not be placed at destination cell %s while moving"
+			% destination_cell
 		)
 	if bomber.active_bombs != 1:
 		failures.append(
