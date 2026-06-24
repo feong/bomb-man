@@ -34,7 +34,7 @@ const DIR_TO_ANIM := {
 
 
 func _ready() -> void:
-	_animated_sprite = get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	_animated_sprite = _find_animated_sprite()
 	if _animated_sprite:
 		_scale_animated_sprite()
 		_play_idle()
@@ -44,6 +44,16 @@ func _ready() -> void:
 		_sprite.position = Vector2(-12, -12)
 		_sprite.color = body_color
 		add_child(_sprite)
+
+
+func _find_animated_sprite() -> AnimatedSprite2D:
+	var named := get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	if named:
+		return named
+	for child in get_children():
+		if child is AnimatedSprite2D:
+			return child as AnimatedSprite2D
+	return null
 
 
 func setup(manager: GameManager, cell: Vector2i, player: bool, color: Color) -> void:
@@ -137,6 +147,8 @@ func _finish_move() -> void:
 		game_manager.on_bomber_exited_cell(self, _previous_cell)
 	game_manager.resolve_occupancy_after_move(self)
 	game_manager.check_pickup(self)
+	if not is_player:
+		_play_idle()
 
 
 func _play_walk(dir: Vector2i) -> void:

@@ -31,18 +31,22 @@ func _tick(params: Dictionary) -> void:
 			var escape := gm.find_escape_cell_after_bomb(bomber)
 			if escape != Vector2i(-1, -1) and not bomber._is_moving:
 				_step_toward(escape, true)
+				_sync_idle()
 				return
 		if not bomber._is_moving:
 			_move_away(params)
+		_sync_idle()
 		return
 	if randf() < float(params.powerup) and gm.nearest_powerup_cell(bomber.grid_pos) != Vector2i(-1, -1):
 		_move_toward(gm.nearest_powerup_cell(bomber.grid_pos))
+		_sync_idle()
 		return
 	if player != null and player.is_alive and randf() < float(params.chase):
 		if _adjacent_to(player.grid_pos):
 			_try_bomb_and_flee()
 		else:
 			_move_toward(player.grid_pos)
+		_sync_idle()
 		return
 	var soft := gm.nearest_soft_wall_cell(bomber.grid_pos)
 	if soft != Vector2i(-1, -1):
@@ -53,8 +57,15 @@ func _tick(params: Dictionary) -> void:
 				_move_away_from_cell(soft)
 		else:
 			_move_toward(soft)
+		_sync_idle()
 		return
 	_move_random_safe()
+	_sync_idle()
+
+
+func _sync_idle() -> void:
+	if bomber != null and not bomber._is_moving:
+		bomber._play_idle()
 
 
 func _adjacent_to(cell: Vector2i) -> bool:
