@@ -1,7 +1,7 @@
 # AI 躲避他人炸弹设计规格
 
 **日期：** 2026-06-24  
-**状态：** 待审阅  
+**状态：** 已批准  
 **关联规格：**
 - `docs/superpowers/specs/2025-06-23-bomberman-design.md`
 - `docs/superpowers/specs/2026-06-23-ai-bomb-safety-design.md`
