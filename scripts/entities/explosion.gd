@@ -132,6 +132,14 @@ func _segment_progress(global_progress: float, distance: int) -> float:
 	return clampf(delayed / 0.75, 0.0, 1.0)
 
 
+func get_animation_progress() -> float:
+	return (_total_duration - _timer) / DURATION
+
+
+func get_active_cells_now() -> Array[Vector2i]:
+	return _get_active_cells(get_animation_progress())
+
+
 func _get_active_cells(progress: float) -> Array[Vector2i]:
 	var active: Array[Vector2i] = []
 	var seen: Dictionary = {}

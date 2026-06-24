@@ -225,8 +225,20 @@ func get_danger_cells(extra_bomb: Dictionary = {}) -> Dictionary:
 	return danger
 
 
+func get_active_explosion_cells() -> Dictionary:
+	var active: Dictionary = {}
+	if _effects_root == null:
+		return active
+	for child in _effects_root.get_children():
+		if child is Explosion:
+			var explosion := child as Explosion
+			for cell in explosion.get_active_cells_now():
+				active[cell] = true
+	return active
+
+
 func is_cell_in_blast(cell: Vector2i) -> bool:
-	return get_danger_cells().has(cell)
+	return get_danger_cells().has(cell) or get_active_explosion_cells().has(cell)
 
 
 func get_next_step_toward(bomber: Bomber, goal: Vector2i, avoid_blast: bool) -> Vector2i:
@@ -253,6 +265,8 @@ func _escape_bfs(bomber: Bomber, danger: Dictionary, bomb_cell: Vector2i) -> Dic
 				continue
 			if bombs.has(n) and n != bomb_cell:
 				continue
+			if get_active_explosion_cells().has(n):
+				continue
 			distances[n] = steps + 1
 			queue.append(n)
 	return distances
@@ -270,6 +284,8 @@ func _can_walk_for_escape(bomber: Bomber, cell: Vector2i, bomb_cell: Vector2i) -
 
 func _is_viable_escape_cell(bomber: Bomber, cell: Vector2i, danger: Dictionary, bomb_cell: Vector2i) -> bool:
 	if danger.has(cell):
+		return false
+	if get_active_explosion_cells().has(cell):
 		return false
 	for d in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
 		var n: Vector2i = cell + d
@@ -423,7 +439,7 @@ func find_safe_cell(bomber: Bomber, params: Dictionary) -> Vector2i:
 	var visited: Dictionary = {bomber.grid_pos: true}
 	while not queue.is_empty():
 		var c: Vector2i = queue.pop_front()
-		if not is_cell_dangerous(c, params):
+		if not is_cell_dangerous(c, params) and not get_active_explosion_cells().has(c):
 			return c
 		for d in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
 			var n: Vector2i = c + d
@@ -441,6 +457,7 @@ func find_path(bomber: Bomber, goal: Vector2i, avoid_blast: bool = false) -> Arr
 	var danger: Dictionary = {}
 	if avoid_blast:
 		danger = get_danger_cells()
+	var burning := get_active_explosion_cells()
 	var queue: Array[Vector2i] = [start]
 	var came_from: Dictionary = {start: start}
 	while not queue.is_empty():
@@ -450,6 +467,8 @@ func find_path(bomber: Bomber, goal: Vector2i, avoid_blast: bool = false) -> Arr
 		for d in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
 			var n: Vector2i = c + d
 			if came_from.has(n):
+				continue
+			if burning.has(n):
 				continue
 			if avoid_blast and danger.has(n) and n != goal:
 				continue
