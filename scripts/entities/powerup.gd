@@ -3,22 +3,24 @@ extends Area2D
 
 enum Kind { BOMB, FIRE, SPEED }
 
-const COLORS := {
-	Kind.BOMB: Color(0.95, 0.95, 0.95),
-	Kind.FIRE: Color(0.95, 0.2, 0.2),
-	Kind.SPEED: Color(0.2, 0.85, 0.9),
+const TEXTURES := {
+	Kind.BOMB: preload("res://assets/textures/powerups/powerup_bomb.png"),
+	Kind.FIRE: preload("res://assets/textures/powerups/powerup_fire.png"),
+	Kind.SPEED: preload("res://assets/textures/powerups/powerup_speed.png"),
 }
 
 var game_manager: GameManager
 var grid_pos: Vector2i
 var kind: Kind
-var _sprite: ColorRect
+var _sprite: Sprite2D
 
 
 func _ready() -> void:
-	_sprite = ColorRect.new()
-	_sprite.size = Vector2(18, 18)
-	_sprite.position = Vector2(-9, -9)
+	_sprite = Sprite2D.new()
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_sprite.centered = true
+	var scale_factor := GameConstants.POWERUP_SPRITE_SIZE / float(GameConstants.POWERUP_TEXTURE_SIZE)
+	_sprite.scale = Vector2(scale_factor, scale_factor)
 	add_child(_sprite)
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
@@ -32,7 +34,7 @@ func setup(manager: GameManager, cell: Vector2i, power_kind: Kind) -> void:
 	grid_pos = cell
 	kind = power_kind
 	position = GameConstants.grid_to_world(cell)
-	_sprite.color = COLORS[kind]
+	_sprite.texture = TEXTURES[kind]
 
 
 static func random_kind() -> Kind:
