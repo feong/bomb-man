@@ -2,7 +2,9 @@
 
 **日期：** 2026-06-23  
 **状态：** 已批准  
-**关联规格：** `docs/superpowers/specs/2025-06-23-bomberman-design.md`
+**关联规格：**
+- `docs/superpowers/specs/2025-06-23-bomberman-design.md`
+- `docs/superpowers/specs/2026-06-24-explosion-damage-design.md`
 
 ---
 
@@ -83,6 +85,19 @@ max_steps = floor(GameConstants.BOMB_FUSE_SEC / bomber.get_move_duration())
 旧逻辑：四邻有一格能走 → 放弹。  
 新逻辑：四邻能走 ≠ 安全；必须能到达**射线外**的安全格，且在引信结束前走得完。
 
+### 3.4 引爆后实火 vs 引信危险
+
+引信阶段与爆炸动画阶段的危险语义**不同**。完整算法见 `docs/superpowers/specs/2026-06-24-explosion-damage-design.md`。
+
+| 概念 | 数据源 | 含义 | 逃生 BFS | `find_path` |
+|------|--------|------|----------|-------------|
+| **引信危险格** | `get_danger_cells()` | 未引爆炸弹的十字范围；引爆后站立会受伤 | **可穿过**（终点须在射线外） | 仅 `avoid_blast = false` 时可穿过 |
+| **实火格** | `get_active_explosion_cells()` | 已引爆、动画播放中且 `0 < t < 1` 的格 | **不可穿过** | **始终不可穿过** |
+
+`is_cell_in_blast(cell)` 现为上述两者之并集，供 AI 逃离、随机移动等即时危险判断。
+
+**不变：** `can_safely_place_bomb` / `find_escape_cell_after_bomb` 的 `max_steps` 仍基于 `BOMB_FUSE_SEC`，**不**引入爆炸动画时长 `_total_duration`。
+
 ---
 
 ## 4. 核心算法（GameManager）
@@ -116,9 +131,10 @@ BFS 共用实现，返回 `visited` 字典：`Vector2i → 从起点到该格的
 - 在边界内
 - 非硬墙/软墙（`map_data.is_blocking`）
 - 非场上已有炸弹格（`bombs.has(n)`）
+- **非实火格**（`get_active_explosion_cells().has(n)` 为真则不可扩展）
 - **例外**：`bomb_cell` 对正在放弹的 `bomber` 视为可通行（穿弹规则）
 
-**重要：危险格不阻挡 BFS 扩展。** `danger.has(n)` 的格照常入队；仅当某格 `not danger.has(n)` 时视为候选安全格。
+**重要：引信危险格不阻挡 BFS 扩展。** `danger.has(n)` 的格照常入队；实火格始终阻挡。候选安全格须 `not danger.has(cell)` 且 `not get_active_explosion_cells().has(cell)`（见 §3.4）。
 
 ### 4.4 `can_safely_place_bomb(bomber: Bomber) -> bool`
 
@@ -191,7 +207,8 @@ if _adjacent_to(target):
 
 ### 5.4 不变行为
 
-- 危险区逃离（`_move_away` + `find_safe_cell`）——针对**已存在**的炸弹，仍不穿过危险区
+- 危险区逃离（`_move_away` + `find_safe_cell`）——针对**已存在**的炸弹引信危险，仍不穿过 `get_danger_cells()`；同时避开实火格
+- `is_cell_in_blast` 含引信危险与实火格，用于站立格即时危险判断
 - 寻道具、追击、随机移动逻辑
 - 决策间隔与各难度概率参数
 
@@ -201,7 +218,7 @@ if _adjacent_to(target):
 
 | 文件 | 变更 |
 |------|------|
-| `scripts/systems/game_manager.gd` | 新增 `get_explosion_cells`、`get_danger_cells`、`_escape_bfs`、`can_safely_place_bomb`、`find_escape_cell_after_bomb`；`_trigger_explosion` 改为调用 `get_explosion_cells` |
+| `scripts/systems/game_manager.gd` | 新增 `get_explosion_cells`、`get_danger_cells`、`_escape_bfs`、`can_safely_place_bomb`、`find_escape_cell_after_bomb`；`_trigger_explosion` 改为调用 `get_explosion_cells`；后续增补 `apply_explosion_damage`、`get_active_explosion_cells`（见 `2026-06-24-explosion-damage-design.md`） |
 | `scripts/entities/ai_controller.gd` | 新增 `_try_bomb_and_flee`；替换放弹逻辑；删除 `_has_escape_route` |
 | `tests/test_ai_bomb_safety.gd` | 新增单元测试 |
 | `tests/run_tests_node.gd` | 注册新测试 |
