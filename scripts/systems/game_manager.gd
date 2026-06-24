@@ -342,21 +342,24 @@ func can_safely_place_bomb(bomber: Bomber) -> bool:
 	return _pick_best_escape_cell(bomber, distances, danger, bomb_cell, max_steps) != Vector2i(-1, -1)
 
 
-func find_escape_cell_after_bomb(bomber: Bomber) -> Vector2i:
-	if bomber == null or not bomber.is_alive:
+func find_escape_from_danger(bomber: Bomber) -> Vector2i:
+	if bomber == null or not bomber.is_alive or map_data == null:
 		return Vector2i(-1, -1)
 	var bomb_cell: Vector2i = Vector2i(-1, -1)
-	for cell in bombs.keys():
-		var b: Bomb = bombs[cell]
-		if b.owner_bomber == bomber:
-			bomb_cell = cell
-			break
-	if bomb_cell == Vector2i(-1, -1):
-		return Vector2i(-1, -1)
+	if bomber.active_bombs > 0:
+		for cell in bombs.keys():
+			var b: Bomb = bombs[cell]
+			if b.owner_bomber == bomber:
+				bomb_cell = cell
+				break
 	var danger := get_danger_cells()
 	var distances := _escape_bfs(bomber, danger, bomb_cell)
 	var max_steps: int = int(floor(GameConstants.BOMB_FUSE_SEC / bomber.get_move_duration()))
 	return _pick_best_escape_cell(bomber, distances, danger, bomb_cell, max_steps)
+
+
+func find_escape_cell_after_bomb(bomber: Bomber) -> Vector2i:
+	return find_escape_from_danger(bomber)
 
 
 func apply_explosion_damage(cells: Array[Vector2i]) -> void:

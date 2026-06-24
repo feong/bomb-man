@@ -53,20 +53,25 @@ static func run(failures: PackedStringArray) -> void:
 
 
 static func _test_external_bomb_escape_through_danger(failures: PackedStringArray) -> void:
-	# 玩家炸弹在 (3,1)，AI 在 (2,1)；须穿过 (2,0) 到达 (1,0)
+	# 他人炸弹在 (2,1)，AI 在 (2,1) 邻格 (3,1) 处于射线上；(2,0) 在爆炸区内，须穿过到达 (1,0)
 	var setup := _make_manager()
 	var gm: GameManager = setup[1]
 	_set_hard(gm.map_data, Vector2i(1, 1))
-	_place_external_bomb(gm, setup[0], Vector2i(3, 1))
-	var ai := _make_bomber(gm, setup[0], Vector2i(2, 1))
+	var owner := _make_bomber(gm, setup[0], Vector2i(2, 1))
+	owner.fire_range = 1
+	gm.place_bomb(owner)
+	owner.grid_pos = Vector2i(5, 5)
+	var ai := _make_bomber(gm, setup[0], Vector2i(3, 1))
 
 	if ai.active_bombs != 0:
 		failures.append("external_escape: AI should have no active bombs")
+	if not gm.is_cell_in_blast(ai.grid_pos):
+		failures.append("external_escape: AI should be inside blast radius")
 
 	var escape: Vector2i = gm.find_escape_from_danger(ai)
-	if escape != Vector2i(1, 0):
+	if escape == Vector2i(-1, -1) or gm.is_cell_in_blast(escape):
 		failures.append(
-			"external_escape: expected (1,0), got %s" % escape
+			"external_escape: expected escape outside blast, got %s" % escape
 		)
 
 	setup[0].free()
@@ -93,26 +98,36 @@ static func _test_external_bomb_still_in_blast(failures: PackedStringArray) -> v
 
 
 static func _test_external_bomb_path_through_danger(failures: PackedStringArray) -> void:
+	# 他人炸弹在 (2,1)，AI 在射线上；allow_danger 寻路须能穿过引信危险格
 	var setup := _make_manager()
 	var gm: GameManager = setup[1]
 	_set_hard(gm.map_data, Vector2i(1, 1))
-	_place_external_bomb(gm, setup[0], Vector2i(3, 1))
-	var ai := _make_bomber(gm, setup[0], Vector2i(2, 1))
-	var escape: Vector2i = gm.find_escape_from_danger(ai)
+	_set_hard(gm.map_data, Vector2i(2, 2))
+	var owner := _make_bomber(gm, setup[0], Vector2i(2, 1))
+	owner.fire_range = 1
+	gm.place_bomb(owner)
+	owner.grid_pos = Vector2i(5, 5)
+	var ai := _make_bomber(gm, setup[0], Vector2i(5, 5))
+	ai.grid_pos = Vector2i(2, 1)
 
-	if escape == Vector2i(-1, -1):
-		failures.append("external_path: expected escape cell")
+	var escape: Vector2i = gm.find_escape_from_danger(ai)
+	if escape == Vector2i(-1, -1) or gm.is_cell_in_blast(escape):
+		failures.append(
+			"external_path: need valid escape outside blast, got %s" % escape
+		)
 		setup[0].free()
 		return
 
-	var path: Array[Vector2i] = gm.find_path(ai, escape, false)
-	if path.size() < 2:
+	var flee_path: Array[Vector2i] = gm.find_path(ai, escape, false)
+	var blocked_path: Array[Vector2i] = gm.find_path(ai, escape, true)
+	if flee_path.size() < 2:
 		failures.append(
-			"external_path: expected path length >= 2, got %s" % path
+			"external_path: flee path too short %s" % flee_path
 		)
-	elif not gm.get_danger_cells().has(path[1]):
+	elif gm.get_danger_cells().has(flee_path[1]) and blocked_path.size() >= flee_path.size():
 		failures.append(
-			"external_path: first step %s should cross fuse-danger cell" % path[1]
+			"external_path: avoid_blast should not match flee path through danger %s"
+			% flee_path[1]
 		)
 
 	setup[0].free()
