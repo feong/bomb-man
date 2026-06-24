@@ -347,7 +347,7 @@ func _trigger_explosion(origin: Vector2i, range: int) -> void:
 	var affected: Array[Vector2i] = get_explosion_cells(origin, range)
 	var explosion: Explosion = EXPLOSION_SCENE.instantiate()
 	_effects_root.add_child(explosion)
-	explosion.setup(self, affected)
+	explosion.setup(self, origin, range, affected)
 	var chain_bombs: Array[Bomb] = []
 	var map_dirty: bool = false
 	for cell in affected:
