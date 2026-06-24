@@ -112,7 +112,7 @@ func _update_fuse_visuals() -> void:
 	if not _animated_sprite or _fuse_duration <= 0.0:
 		return
 	var progress := 1.0 - clampf(_fuse / _fuse_duration, 0.0, 1.0)
-	var freq := lerpf(2.0, 9.0, progress)
-	var amp := lerpf(0.05, 0.16, progress)
+	var freq := lerpf(0.8, 3.0, progress)
+	var amp := lerpf(0.03, 0.08, progress)
 	var pulse := 1.0 + sin(_pulse_time * freq * TAU) * amp
 	_animated_sprite.scale = _base_scale * pulse
