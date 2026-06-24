@@ -28,6 +28,13 @@ static func _set_soft(map_data: MapData, cell: Vector2i) -> void:
 	map_data.set_cell(cell, MapData.CellType.SOFT_WALL)
 
 
+static func _place_external_bomb(gm: GameManager, root: Node, bomb_cell: Vector2i) -> Bomber:
+	var owner := _make_bomber(gm, root, bomb_cell)
+	owner.fire_range = 1
+	gm.place_bomb(owner)
+	return owner
+
+
 static func run(failures: PackedStringArray) -> void:
 	_test_explosion_cells(failures)
 	_test_dead_end_no_bomb(failures)
@@ -40,6 +47,75 @@ static func run(failures: PackedStringArray) -> void:
 	_test_flee_away_from_bomb_behind(failures)
 	_test_avoid_returning_to_blast(failures)
 	_test_still_in_blast_must_flee(failures)
+	_test_external_bomb_escape_through_danger(failures)
+	_test_external_bomb_still_in_blast(failures)
+	_test_external_bomb_path_through_danger(failures)
+
+
+static func _test_external_bomb_escape_through_danger(failures: PackedStringArray) -> void:
+	# 玩家炸弹在 (3,1)，AI 在 (2,1)；须穿过 (2,0) 到达 (1,0)
+	var setup := _make_manager()
+	var gm: GameManager = setup[1]
+	_set_hard(gm.map_data, Vector2i(1, 1))
+	_place_external_bomb(gm, setup[0], Vector2i(3, 1))
+	var ai := _make_bomber(gm, setup[0], Vector2i(2, 1))
+
+	if ai.active_bombs != 0:
+		failures.append("external_escape: AI should have no active bombs")
+
+	var escape: Vector2i = gm.find_escape_from_danger(ai)
+	if escape != Vector2i(1, 0):
+		failures.append(
+			"external_escape: expected (1,0), got %s" % escape
+		)
+
+	setup[0].free()
+
+
+static func _test_external_bomb_still_in_blast(failures: PackedStringArray) -> void:
+	var setup := _make_manager()
+	var gm: GameManager = setup[1]
+	_build_user_pocket_map(gm)
+	_place_external_bomb(gm, setup[0], Vector2i(3, 1))
+	var ai := _make_bomber(gm, setup[0], Vector2i(4, 1))
+
+	if not gm.is_cell_in_blast(ai.grid_pos):
+		failures.append("external_still_in_blast: (4,1) should be in blast")
+
+	var escape: Vector2i = gm.find_escape_from_danger(ai)
+	if escape == Vector2i(-1, -1) or gm.is_cell_in_blast(escape):
+		failures.append(
+			"external_still_in_blast: expected escape outside blast, got %s"
+			% escape
+		)
+
+	setup[0].free()
+
+
+static func _test_external_bomb_path_through_danger(failures: PackedStringArray) -> void:
+	var setup := _make_manager()
+	var gm: GameManager = setup[1]
+	_set_hard(gm.map_data, Vector2i(1, 1))
+	_place_external_bomb(gm, setup[0], Vector2i(3, 1))
+	var ai := _make_bomber(gm, setup[0], Vector2i(2, 1))
+	var escape: Vector2i = gm.find_escape_from_danger(ai)
+
+	if escape == Vector2i(-1, -1):
+		failures.append("external_path: expected escape cell")
+		setup[0].free()
+		return
+
+	var path: Array[Vector2i] = gm.find_path(ai, escape, false)
+	if path.size() < 2:
+		failures.append(
+			"external_path: expected path length >= 2, got %s" % path
+		)
+	elif not gm.get_danger_cells().has(path[1]):
+		failures.append(
+			"external_path: first step %s should cross fuse-danger cell" % path[1]
+		)
+
+	setup[0].free()
 
 
 static func _test_still_in_blast_must_flee(failures: PackedStringArray) -> void:
