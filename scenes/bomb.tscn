@@ -1,6 +1,40 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://bpemd4q4j22bt"]
 
-[ext_resource type="Script" path="res://scripts/entities/bomb.gd" id="1"]
+[ext_resource type="Script" uid="uid://b875he6g60j62" path="res://scripts/entities/bomb.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://e8etv8fyf74n" path="res://assets/textures/entities/bomb_sheet.png" id="2_vpdcx"]
 
-[node name="Bomb" type="Node2D"]
+[sub_resource type="AtlasTexture" id="AtlasTexture_j15uc"]
+atlas = ExtResource("2_vpdcx")
+region = Rect2(0, 0, 325, 588)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_84slv"]
+atlas = ExtResource("2_vpdcx")
+region = Rect2(725, 0, 325, 588)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nxi8k"]
+atlas = ExtResource("2_vpdcx")
+region = Rect2(1450, 0, 325, 588)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1hf1o"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_j15uc")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_84slv")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_nxi8k")
+}],
+"loop": false,
+"name": &"default",
+"speed": 1.5
+}]
+
+[node name="Bomb" type="Node2D" unique_id=171537912]
 script = ExtResource("1")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=762328376]
+sprite_frames = SubResource("SpriteFrames_1hf1o")
+frame_progress = 0.5610345
