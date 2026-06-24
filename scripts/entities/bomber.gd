@@ -82,6 +82,13 @@ func can_act() -> bool:
 	return is_alive and game_manager != null and game_manager.can_bombers_act()
 
 
+func set_facing(dir: Vector2i) -> void:
+	if dir == Vector2i.ZERO:
+		return
+	_facing = dir
+	_play_walk(dir)
+
+
 func try_move(dir: Vector2i) -> void:
 	if not can_act() or _is_moving or dir == Vector2i.ZERO:
 		return
