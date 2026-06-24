@@ -27,14 +27,10 @@ func _tick(params: Dictionary) -> void:
 	var gm: GameManager = bomber.game_manager
 	var player: Bomber = gm.player
 	if gm.is_cell_in_blast(bomber.grid_pos) or gm.is_cell_dangerous(bomber.grid_pos, params):
-		if bomber.active_bombs > 0:
-			var escape := gm.find_escape_cell_after_bomb(bomber)
-			if escape != Vector2i(-1, -1) and not bomber._is_moving:
-				_step_toward(escape, true)
-				_sync_idle()
-				return
 		if not bomber._is_moving:
-			_move_away(params)
+			var escape := gm.find_escape_from_danger(bomber)
+			if escape != Vector2i(-1, -1):
+				_step_toward(escape, true)
 		_sync_idle()
 		return
 	if randf() < float(params.powerup) and gm.nearest_powerup_cell(bomber.grid_pos) != Vector2i(-1, -1):
@@ -94,12 +90,6 @@ func _move_away_from_cell(cell: Vector2i) -> void:
 			bomber.try_move(away)
 			return
 	_move_random_safe()
-
-
-func _move_away(params: Dictionary) -> void:
-	var target := bomber.game_manager.find_safe_cell(bomber, params)
-	if target != Vector2i(-1, -1):
-		_step_toward(target)
 
 
 func _move_toward(cell: Vector2i) -> void:
