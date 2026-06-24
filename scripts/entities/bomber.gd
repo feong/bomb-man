@@ -22,14 +22,28 @@ var _previous_cell: Vector2i
 
 var body_color: Color = Color.WHITE
 var _sprite: ColorRect
+var _animated_sprite: AnimatedSprite2D
+var _facing: Vector2i = Vector2i.DOWN
+
+const DIR_TO_ANIM := {
+	Vector2i.DOWN: "down",
+	Vector2i.UP: "up",
+	Vector2i.LEFT: "left",
+	Vector2i.RIGHT: "right",
+}
 
 
 func _ready() -> void:
-	_sprite = ColorRect.new()
-	_sprite.size = Vector2(24, 24)
-	_sprite.position = Vector2(-12, -12)
-	_sprite.color = body_color
-	add_child(_sprite)
+	_animated_sprite = get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	if _animated_sprite:
+		_scale_animated_sprite()
+		_play_idle()
+	else:
+		_sprite = ColorRect.new()
+		_sprite.size = Vector2(24, 24)
+		_sprite.position = Vector2(-12, -12)
+		_sprite.color = body_color
+		add_child(_sprite)
 
 
 func setup(manager: GameManager, cell: Vector2i, player: bool, color: Color) -> void:
@@ -71,6 +85,8 @@ func try_move(dir: Vector2i) -> void:
 	_move_from = GameConstants.grid_to_world(_previous_cell)
 	_move_to = GameConstants.grid_to_world(grid_pos)
 	position = _move_from
+	_move_dir = dir
+	_play_walk(dir)
 
 
 func get_bomb_placement_cell() -> Vector2i:
@@ -121,3 +137,42 @@ func _finish_move() -> void:
 		game_manager.on_bomber_exited_cell(self, _previous_cell)
 	game_manager.resolve_occupancy_after_move(self)
 	game_manager.check_pickup(self)
+
+
+func _play_walk(dir: Vector2i) -> void:
+	if not _animated_sprite:
+		return
+	_facing = dir
+	var anim_name: String = DIR_TO_ANIM.get(dir, "down")
+	if _animated_sprite.animation != anim_name:
+		_animated_sprite.play(anim_name)
+	elif not _animated_sprite.is_playing():
+		_animated_sprite.play(anim_name)
+
+
+func _play_idle() -> void:
+	if not _animated_sprite:
+		return
+	var anim_name: String = DIR_TO_ANIM.get(_facing, "down")
+	if _animated_sprite.sprite_frames.has_animation(anim_name):
+		_animated_sprite.animation = anim_name
+	_animated_sprite.stop()
+	_animated_sprite.frame = 0
+
+
+func _scale_animated_sprite() -> void:
+	var frames := _animated_sprite.sprite_frames
+	if frames == null:
+		return
+	var anim_names := frames.get_animation_names()
+	if anim_names.is_empty():
+		return
+	var tex: Texture2D = frames.get_frame_texture(anim_names[0], 0)
+	if tex == null:
+		return
+	var frame_height := tex.get_height()
+	if frame_height <= 0:
+		return
+	var s := GameConstants.CHARACTER_SPRITE_HEIGHT / float(frame_height)
+	_animated_sprite.scale = Vector2(s, s)
+	_animated_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

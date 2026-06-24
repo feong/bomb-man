@@ -17,6 +17,8 @@ func _physics_process(_delta: float) -> void:
 		dir = Vector2i.RIGHT
 	if dir != Vector2i.ZERO:
 		try_move(dir)
+	else:
+		_play_idle()
 	if Input.is_action_pressed("place_bomb"):
 		if not _bomb_pressed:
 			_bomb_pressed = true
