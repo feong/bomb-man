@@ -343,6 +343,19 @@ func find_escape_cell_after_bomb(bomber: Bomber) -> Vector2i:
 	return _pick_best_escape_cell(bomber, distances, danger, bomb_cell, max_steps)
 
 
+func apply_explosion_damage(cells: Array[Vector2i]) -> void:
+	if cells.is_empty():
+		return
+	var killed := false
+	for cell in cells:
+		for b in bombers:
+			if b.is_alive and b.grid_pos == cell:
+				b.die("explosion")
+				killed = true
+	if killed:
+		_check_match_end()
+
+
 func _trigger_explosion(origin: Vector2i, range: int) -> void:
 	var affected: Array[Vector2i] = get_explosion_cells(origin, range)
 	var explosion: Explosion = EXPLOSION_SCENE.instantiate()

@@ -52,6 +52,8 @@ func _process(delta: float) -> void:
 	var elapsed := _total_duration - _timer
 	var progress := elapsed / DURATION # 这里的 progress 会超过 1.0，这正是延迟段所需要的
 	_update_segment_scales(progress)
+	if game_manager != null:
+		game_manager.apply_explosion_damage(_get_active_cells(progress))
 	if _timer <= 0.0:
 		queue_free()
 
@@ -99,6 +101,7 @@ func _add_segment(
 	add_child(sprite)
 	_segments.append({
 		"sprite": sprite,
+		"cell": cell,
 		"kind": kind,
 		"dir": dir,
 		"base": _fit_tile_scale(texture),
@@ -127,6 +130,21 @@ func _direction_rotation(dir: Vector2i) -> float:
 func _segment_progress(global_progress: float, distance: int) -> float:
 	var delayed := global_progress - float(distance) * 0.12
 	return clampf(delayed / 0.75, 0.0, 1.0)
+
+
+func _get_active_cells(progress: float) -> Array[Vector2i]:
+	var active: Array[Vector2i] = []
+	var seen: Dictionary = {}
+	for seg in _segments:
+		var t := _segment_progress(progress, seg["distance"])
+		if t <= 0.0 or t >= 1.0:
+			continue
+		var cell: Vector2i = seg["cell"]
+		if seen.has(cell):
+			continue
+		seen[cell] = true
+		active.append(cell)
+	return active
 
 
 func _update_segment_scales(progress: float) -> void:
